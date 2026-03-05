@@ -1,6 +1,6 @@
 # Smart Contract Skills Catalog
 
-Complete reference for all 26 smart contract security and quality skills.
+Complete reference for all 30 smart contract security and quality skills.
 
 ## Quick Start
 
@@ -349,6 +349,186 @@ From anywhere, use Claude Code commands:
 
 ---
 
+## Skills 21-33: Advanced Security & Governance (Sprint 1)
+
+### 22. Threat Model Generator
+
+**Path:** `threat-model-generator.sh`
+**Purpose:** Generates comprehensive threat model by analyzing contract entry points, roles, and trust boundaries
+**Status Codes:** `pass`, `warn`
+**Checks:**
+
+- Entry points (external/public functions)
+- Trust boundaries (access modifiers, msg.sender checks)
+- Role definitions (bytes32 constant ROLE)
+- Unprotected state changes
+- Attack surface analysis
+
+**Artifacts:**
+
+- `build/threat-model.md` - Full threat model report
+- Attack surface matrix
+
+**Example Output:**
+
+```json
+{
+  "skill": "threat-model-generator",
+  "status": "pass",
+  "summary": "Threat model generated successfully",
+  "artifacts": {
+    "findings": [
+      "Found 15 entry points (external/public functions)",
+      "Detected 8 trust boundaries"
+    ],
+    "attack_surface": {
+      "entry_points": 15,
+      "trust_boundaries": 8,
+      "roles": 3,
+      "unprotected_state_changes": 0
+    },
+    "threat_model_file": "build/threat-model.md"
+  }
+}
+```
+
+---
+
+### 28. Secrets & Key Safety Validator
+
+**Path:** `secrets-safety-validator.sh`
+**Purpose:** Scans for hardcoded secrets, private keys, and credential exposure
+**Status Codes:** `pass`, `warn`, `fail`
+**Checks:**
+
+- Private key patterns (Ethereum, Bitcoin, PEM format)
+- API keys (OpenAI, Google, AWS)
+- Hardcoded passwords/secrets/tokens
+- .env files in .gitignore
+- .env files tracked by git
+- Hardcoded credentials in URLs
+- AWS credentials
+
+**Critical Findings:**
+
+- ❌ Hardcoded private keys in source code
+- ❌ API keys in config files
+- ❌ .env files tracked by git
+- ❌ AWS credentials exposed
+
+**Example Output:**
+
+```json
+{
+  "skill": "secrets-safety-validator",
+  "status": "pass",
+  "summary": "No secrets or credential exposure detected",
+  "artifacts": {
+    "findings": [".gitignore properly excludes .env files"],
+    "violations": 0,
+    "warnings": 0
+  }
+}
+```
+
+---
+
+### 32. Governance Safety Checker
+
+**Path:** `governance-safety-checker.sh`
+**Purpose:** Validates governance mechanisms, timelocks, multisig patterns, and centralization risks
+**Status Codes:** `pass`, `warn`, `fail`
+**Checks:**
+
+- Admin/owner functions detection
+- Single owner pattern (centralization risk)
+- Timelock usage and delay validation
+- Multisig threshold/quorum definitions
+- Governance parameter bounds validation
+- Emergency function access controls
+- Upgradeability governance controls
+- Mint/burn supply caps
+
+**Critical Findings:**
+
+- ❌ Upgradeable contract without governance/timelock control
+- ⚠️ Uses Ownable without 2-step transfer or timelock
+- ⚠️ Emergency functions controlled by single owner (no multisig)
+- ⚠️ Mint/burn without supply cap validation
+
+**Example Output:**
+
+```json
+{
+  "skill": "governance-safety-checker",
+  "status": "warn",
+  "summary": "Governance improvements recommended - 2 risks, missing timelock/multisig",
+  "artifacts": {
+    "findings": [
+      "Found 5 privileged admin functions",
+      "WARNING: No timelock mechanisms found"
+    ],
+    "admin_functions": 5,
+    "centralization_risks": 2,
+    "timelock_usage": 0,
+    "multisig_patterns": 0
+  }
+}
+```
+
+---
+
+### 33. Emergency Procedures Validator
+
+**Path:** `emergency-procedures-validator.sh`
+**Purpose:** Validates emergency mechanisms - pause, circuit breakers, emergency withdrawals, kill switches
+**Status Codes:** `pass`, `warn`, `fail`
+**Checks:**
+
+- Pausable pattern (pause/unpause functions)
+- Pause function access control
+- Circuit breaker patterns
+- Emergency withdrawal functions
+- Emergency withdrawal access controls
+- Reentrancy guards on emergency functions
+- Kill switches (selfdestruct) with proper access control
+
+**Artifacts:**
+
+- `build/emergency-runbook.md` - Generated emergency response runbook
+
+**Critical Findings:**
+
+- ❌ selfdestruct without access control (CRITICAL)
+- ⚠️ pause() lacks access control
+- ⚠️ Emergency withdrawals without reentrancy guard
+- ⚠️ No pause mechanism found
+- ⚠️ No emergency withdrawal mechanisms
+
+**Example Output:**
+
+```json
+{
+  "skill": "emergency-procedures-validator",
+  "status": "pass",
+  "summary": "Emergency procedures validated - comprehensive coverage",
+  "artifacts": {
+    "findings": [
+      "Pause mechanisms: 3 contract(s)",
+      "Emergency withdrawals: 2 function(s)"
+    ],
+    "pause_mechanisms": 3,
+    "circuit_breakers": 1,
+    "emergency_withdrawals": 2,
+    "kill_switches": 0,
+    "missing_procedures": 0,
+    "runbook_file": "build/emergency-runbook.md"
+  }
+}
+```
+
+---
+
 ## Running Skills
 
 ### Individual Skill
@@ -478,6 +658,6 @@ To add new skills:
 
 ---
 
-**Total Skills:** 26
+**Total Skills:** 30
 **Last Updated:** 2026-03-05
 **Location:** `/Users/mac/skills-setup-homie/skills/`
