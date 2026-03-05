@@ -25,7 +25,7 @@ ls /Users/mac/skills-setup-homie/skills/
 
 ```
 skills-setup-homie/
-├── skills/                           # 26 executable skill scripts
+├── skills/                           # 30 executable skill scripts (Sprint 1 of 41)
 │   ├── project-structure-check.sh    # 01: Project layout validation
 │   ├── solidity-format-check.sh      # 02: Format enforcement
 │   ├── foundry-config-check.sh       # 03: Config validation
@@ -74,7 +74,7 @@ These commands are registered in:
 - `/Users/mac/.claude/commands/smc-audit.md`
 - `/Users/mac/.claude/commands/smc-init-project.md`
 
-## 📦 26 Skills Overview
+## 📦 30 Skills Overview (Sprint 1 Complete)
 
 ### Foundation (01-10)
 
@@ -105,6 +105,15 @@ These commands are registered in:
 | 18  | erc-compliance-validator   | ERC20/721/1155          |
 | 19  | oracle-integration-guard   | Oracle safety           |
 | 20  | external-call-audit        | External call security  |
+
+### Advanced Security & Governance (21-33) - Sprint 1
+
+| #   | Skill                          | Purpose                       |
+| --- | ------------------------------ | ----------------------------- |
+| 22  | threat-model-generator         | Attack surface analysis       |
+| 28  | secrets-safety-validator       | Secret & credential scanning  |
+| 32  | governance-safety-checker      | Governance & centralization   |
+| 33  | emergency-procedures-validator | Emergency response mechanisms |
 
 See [SKILLS_CATALOG.md](SKILLS_CATALOG.md) for complete documentation.
 
@@ -344,7 +353,7 @@ JSON
 
 ---
 
-**Total Skills:** 26
+**Total Skills:** 30 (Sprint 1 of 41 planned)
 **Global Commands:** 3
 **Last Updated:** 2026-03-05
 **Maintained by:** Claude Code Skills System
