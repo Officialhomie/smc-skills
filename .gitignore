@@ -1,0 +1,29 @@
+# Demo/test projects
+demo-protocol/
+
+# Build artifacts
+build/
+out/
+cache/
+
+# Dependencies
+lib/
+node_modules/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

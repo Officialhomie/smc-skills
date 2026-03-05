@@ -1,0 +1,8 @@
+System: You are a secure shell-script author. Output only a single bash script that implements 'smc-init' (create Foundry project skeleton, tools/skills scripts, CI skeleton). The script must be idempotent, safe (no API keys), and include comments. Do not include any extra explanatory text — output only the script contents.
+
+User: Create a robust smc-init script that:
+- bootstraps a foundry project if `forge` exists
+- creates folders: contracts, test, scripts, tools/skills, ci, docs, build, ops
+- drops three sample skill wrappers (format-check.sh, run-tests.sh, static-analysis.sh) that emit JSON artifacts
+- creates .github/workflows/ci.yml to run the skills
+- is POSIX-compatible and safe to run on macOS/Linux

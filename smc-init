@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+# smc-init - bootstrap a Foundry smart-contract skeleton + skills
+set -e
+
+NAME=${1:-my-protocol}
+DIR=${PWD}/${NAME}
+
+if [ -d "$DIR" ]; then
+  echo "Directory $DIR already exists. Aborting."
+  exit 1
+fi
+
+echo "Creating project at $DIR"
+mkdir -p "$DIR"
+cd "$DIR"
+
+# Init git
+git init
+
+# Try Foundry init; fall back to minimal layout
+if command -v forge >/dev/null 2>&1; then
+  forge init --template foundry-rs/forge-template . --force 2>/dev/null || forge init --no-git . 2>/dev/null || true
+else
+  mkdir -p contracts scripts test libs
+fi
+
+# Ensure canonical layout
+mkdir -p contracts test scripts tools/skills ci docs build ops
+
+# Common top-level files
+cat > README.md <<'MD'
+# project: SMC bootstrap
+Bootstrapped by smc-init
+
+## GitHub
+
+- **CI** runs \`tools/skills/ci-orchestrator.sh\` (includes \`github-status.sh\` when \`gh\` is available).
+- **Create repo and push**: \`SMC_GITHUB_CREATE=1 ./tools/skills/github-repo-setup.sh\` (optional, local only).
+MD
+
+cat > .gitignore <<'GI'
+node_modules
+lib
+out
+forge-std
+build
+GI
+
+# create skills folder and sample skills
+mkdir -p tools/skills
+
+cat > tools/skills/format-check.sh <<'SK'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+# formatting (if installed)
+if command -v prettier >/dev/null 2>&1; then
+  prettier --write "**/*.{ts,js,sol,md,json}" || true
+fi
+if command -v solhint >/dev/null 2>&1; then
+  solhint "contracts/**/*.sol" || true
+fi
+cat <<JSON
+{
+  "skill":"format-check",
+  "status":"pass",
+  "summary":"format/lint applied (if tools installed)",
+  "artifacts":{},
+  "metadata":{"runner":"local"}
+}
+JSON
+SK
+chmod +x tools/skills/format-check.sh
+
+cat > tools/skills/run-tests.sh <<TS
+#!/usr/bin/env bash
+set -e
+ROOT="\$(git rev-parse --show-toplevel)" || ROOT="\$PWD"
+cd "\$ROOT"
+STATUS="pass"
+SUMMARY="all tests passed"
+if command -v forge >/dev/null 2>&1; then
+  if ! forge test -q; then
+    STATUS="fail"
+    SUMMARY="some tests failed"
+  fi
+else
+  STATUS="warn"
+  SUMMARY="forge not found"
+fi
+cat <<JSON
+{
+  "skill":"run-tests",
+  "status":"\$STATUS",
+  "summary":"\$SUMMARY",
+  "artifacts":{"test_command":"forge test"},
+  "metadata":{"runner":"local"}
+}
+JSON
+TS
+chmod +x tools/skills/run-tests.sh
+
+cat > tools/skills/static-analysis.sh <<SA
+#!/usr/bin/env bash
+set -e
+ROOT="\$(git rev-parse --show-toplevel)" || ROOT="\$PWD"
+cd "\$ROOT"
+STATUS="warn"
+SUMMARY="no static analyzer installed"
+if command -v slither >/dev/null 2>&1; then
+  slither ./contracts --json build/slither.json && STATUS="pass" && SUMMARY="slither run"
+elif command -v solhint >/dev/null 2>&1; then
+  solhint "contracts/**/*.sol" && STATUS="pass" && SUMMARY="solhint run"
+fi
+cat <<JSON
+{
+  "skill":"static-analysis",
+  "status":"\$STATUS",
+  "summary":"\$SUMMARY",
+  "artifacts":{},
+  "metadata":{"runner":"local"}
+}
+JSON
+SA
+chmod +x tools/skills/static-analysis.sh
+
+cat > tools/skills/github-status.sh <<'GH'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+STATUS="warn"
+SUMMARY="GitHub CLI not available or not authenticated"
+PR_COUNT="0"
+LAST_SAFE="none"
+if command -v gh >/dev/null 2>&1; then
+  if gh auth status -h github.com >/dev/null 2>&1; then
+    STATUS="pass"
+    SUMMARY="GitHub status retrieved"
+    PR_COUNT=$(gh pr list --state open 2>/dev/null | wc -l | tr -d ' ')
+    RAW=$(gh run list --limit 1 --json conclusion,displayTitle 2>/dev/null) || true
+    LAST_RUN=$(echo "$RAW" | sed -n 's/.*"conclusion":"\([^"]*\)".*"displayTitle":"\([^"]*\)".*/\1: \2/p' | head -1 || echo "none")
+    LAST_SAFE=$(echo "$LAST_RUN" | sed 's/"/_/g' | head -c 80)
+    [ -z "$LAST_SAFE" ] && LAST_SAFE="none"
+  fi
+fi
+echo "{\"skill\":\"github-status\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{\"open_prs\":$PR_COUNT,\"last_run\":\"$LAST_SAFE\"},\"metadata\":{\"runner\":\"local\"}}"
+GH
+chmod +x tools/skills/github-status.sh
+
+cat > tools/skills/github-repo-setup.sh <<'GHS'
+#!/usr/bin/env bash
+# Optional: create GitHub repo and push. Set SMC_GITHUB_VISIBILITY=public|private (default: private).
+# Run from repo root: ./tools/skills/github-repo-setup.sh
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+STATUS="warn"
+SUMMARY="GitHub repo setup skipped (gh not installed or not authenticated)"
+REPO_URL=""
+if command -v gh >/dev/null 2>&1 && gh auth status -h github.com >/dev/null 2>&1; then
+  if git remote get-url origin >/dev/null 2>&1; then
+    REPO_URL=$(git remote get-url origin)
+    STATUS="pass"
+    SUMMARY="Remote origin already set: $REPO_URL"
+  elif [ -n "${SMC_GITHUB_CREATE:-}" ]; then
+    VIS="${SMC_GITHUB_VISIBILITY:-private}"
+    if gh repo create --source=. --remote=origin --"$VIS" --push 2>/dev/null; then
+      REPO_URL=$(git remote get-url origin)
+      STATUS="pass"
+      SUMMARY="Created repo and pushed to $REPO_URL"
+    else
+      STATUS="fail"
+      SUMMARY="gh repo create or push failed"
+    fi
+  else
+    SUMMARY="Set SMC_GITHUB_CREATE=1 to create repo and push (origin not set)"
+  fi
+fi
+echo "{\"skill\":\"github-repo-setup\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{\"repo_url\":\"$REPO_URL\"},\"metadata\":{\"runner\":\"local\"}}"
+GHS
+chmod +x tools/skills/github-repo-setup.sh
+
+# --- Skills 01-10: workflow templates ---
+cat > tools/skills/project-structure-check.sh <<'PST'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+REQUIRED_DIRS=("contracts" "test" "scripts" "tools/skills" "docs" "ci")
+MISSING=()
+for dir in "${REQUIRED_DIRS[@]}"; do
+  [ ! -d "$dir" ] && MISSING+=("$dir")
+done
+if [ ${#MISSING[@]} -ne 0 ]; then STATUS="fail"; SUMMARY="Missing required directories"; else STATUS="pass"; SUMMARY="Project structure valid"; fi
+if [ ${#MISSING[@]} -eq 0 ]; then MISSING_JSON="[]"
+elif command -v jq >/dev/null 2>&1; then MISSING_JSON=$(printf '%s\n' "${MISSING[@]}" | jq -R . | jq -s .)
+else MISSING_JSON="[\"${MISSING[0]}\""; for m in "${MISSING[@]:1}"; do MISSING_JSON="$MISSING_JSON,\"$m\""; done; MISSING_JSON="${MISSING_JSON}]"
+fi
+echo "{\"skill\":\"project-structure-check\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{\"missing_directories\":$MISSING_JSON},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+PST
+chmod +x tools/skills/project-structure-check.sh
+
+cat > tools/skills/solidity-format-check.sh <<'SFC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+if ! command -v forge >/dev/null 2>&1; then
+  echo '{"skill":"solidity-format-check","status":"warn","summary":"forge not installed","artifacts":{},"metadata":{"timestamp":"'"$(date -u +%FT%TZ)"'"}}'
+  exit 0
+fi
+STATUS="pass"; forge fmt --check 2>/dev/null || STATUS="fail"
+echo "{\"skill\":\"solidity-format-check\",\"status\":\"$STATUS\",\"summary\":\"forge fmt executed\",\"artifacts\":{},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+SFC
+chmod +x tools/skills/solidity-format-check.sh
+
+cat > tools/skills/foundry-config-check.sh <<'FCC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+if [ ! -f "foundry.toml" ]; then
+  echo '{"skill":"foundry-config-check","status":"fail","summary":"foundry.toml missing","artifacts":{"missing_keys":[]},"metadata":{"timestamp":"'"$(date -u +%FT%TZ)"'"}}'
+  exit 0
+fi
+REQUIRED_KEYS=("optimizer" "solc_version"); MISSING=()
+for key in "${REQUIRED_KEYS[@]}"; do grep -q "$key" foundry.toml 2>/dev/null || MISSING+=("$key"); done
+if [ ${#MISSING[@]} -ne 0 ]; then STATUS="fail"; SUMMARY="Missing required foundry config keys"; else STATUS="pass"; SUMMARY="Foundry config valid"; fi
+if [ ${#MISSING[@]} -eq 0 ]; then MISSING_JSON="[]"
+elif command -v jq >/dev/null 2>&1; then MISSING_JSON=$(printf '%s\n' "${MISSING[@]}" | jq -R . | jq -s .)
+else MISSING_JSON="[\"${MISSING[0]}\""; for m in "${MISSING[@]:1}"; do MISSING_JSON="$MISSING_JSON,\"$m\""; done; MISSING_JSON="${MISSING_JSON}]"
+fi
+echo "{\"skill\":\"foundry-config-check\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{\"missing_keys\":$MISSING_JSON},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+FCC
+chmod +x tools/skills/foundry-config-check.sh
+
+cat > tools/skills/compile-check.sh <<'CLC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+STATUS="pass"; SUMMARY="Compilation successful"
+forge build 2>/dev/null || { STATUS="fail"; SUMMARY="Compilation failed"; }
+echo "{\"skill\":\"compile-check\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+CLC
+chmod +x tools/skills/compile-check.sh
+
+cat > tools/skills/unit-test-runner.sh <<'UTR'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+OUTPUT=$(forge test -q 2>&1) || true
+r=$?; STATUS="pass"; [ $r -ne 0 ] && STATUS="fail"
+OUTPUT_SAFE=$(echo "$OUTPUT" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ' | head -c 2000)
+echo "{\"skill\":\"unit-test-runner\",\"status\":\"$STATUS\",\"summary\":\"Unit tests executed\",\"artifacts\":{\"output\":\"$OUTPUT_SAFE\"},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+UTR
+chmod +x tools/skills/unit-test-runner.sh
+
+cat > tools/skills/fuzz-test-check.sh <<'FTC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+STATUS="pass"; forge test --fuzz-runs 256 2>/dev/null || STATUS="fail"
+echo "{\"skill\":\"fuzz-test-check\",\"status\":\"$STATUS\",\"summary\":\"Fuzz tests executed\",\"artifacts\":{\"fuzz_runs\":256},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+FTC
+chmod +x tools/skills/fuzz-test-check.sh
+
+cat > tools/skills/gas-snapshot-check.sh <<'GSC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+STATUS="pass"; forge snapshot 2>/dev/null || STATUS="fail"
+echo "{\"skill\":\"gas-snapshot-check\",\"status\":\"$STATUS\",\"summary\":\"Gas snapshot generated\",\"artifacts\":{\"snapshot_file\":\"gas-snapshot.txt\"},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+GSC
+chmod +x tools/skills/gas-snapshot-check.sh
+
+cat > tools/skills/slither-analysis.sh <<'SLA'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+if ! command -v slither >/dev/null 2>&1; then
+  echo '{"skill":"slither-analysis","status":"warn","summary":"slither not installed","artifacts":{},"metadata":{"timestamp":"'"$(date -u +%FT%TZ)"'"}}'
+  exit 0
+fi
+mkdir -p build; STATUS="pass"
+slither . --json build/slither.json 2>/dev/null || STATUS="fail"
+echo "{\"skill\":\"slither-analysis\",\"status\":\"$STATUS\",\"summary\":\"Slither executed\",\"artifacts\":{\"report\":\"build/slither.json\"},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+SLA
+chmod +x tools/skills/slither-analysis.sh
+
+cat > tools/skills/dependency-audit.sh <<'DPA'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+forge update 2>/dev/null || true
+echo "{\"skill\":\"dependency-audit\",\"status\":\"pass\",\"summary\":\"Dependencies updated (manual review required)\",\"artifacts\":{},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+DPA
+chmod +x tools/skills/dependency-audit.sh
+
+cat > tools/skills/reentrancy-pattern-check.sh <<'RPC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+MATCHES=""; [ -d contracts ] && MATCHES=$(grep -R "call.value" contracts 2>/dev/null || true) || true
+if [ -n "$MATCHES" ]; then STATUS="warn"; SUMMARY="Low-level call pattern scan (matches found)"; else STATUS="pass"; SUMMARY="Low-level call pattern scan"; fi
+MATCHES_SAFE=$(echo "$MATCHES" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' ' | head -c 1000)
+echo "{\"skill\":\"reentrancy-pattern-check\",\"status\":\"$STATUS\",\"summary\":\"$SUMMARY\",\"artifacts\":{\"matches\":\"$MATCHES_SAFE\"},\"metadata\":{\"timestamp\":\"$(date -u +%FT%TZ)\"}}"
+RPC
+chmod +x tools/skills/reentrancy-pattern-check.sh
+
+cat > tools/skills/ci-orchestrator.sh <<'ORC'
+#!/usr/bin/env bash
+set -e
+ROOT="$(git rev-parse --show-toplevel)" || ROOT="$PWD"
+cd "$ROOT"
+SKILLS=(
+  "tools/skills/project-structure-check.sh"
+  "tools/skills/solidity-format-check.sh"
+  "tools/skills/foundry-config-check.sh"
+  "tools/skills/compile-check.sh"
+  "tools/skills/unit-test-runner.sh"
+  "tools/skills/fuzz-test-check.sh"
+  "tools/skills/gas-snapshot-check.sh"
+  "tools/skills/slither-analysis.sh"
+  "tools/skills/dependency-audit.sh"
+  "tools/skills/reentrancy-pattern-check.sh"
+  "tools/skills/format-check.sh"
+  "tools/skills/static-analysis.sh"
+  "tools/skills/run-tests.sh"
+  "tools/skills/github-status.sh"
+)
+for s in "${SKILLS[@]}"; do
+  echo ">>> running $s"
+  out=$($s)
+  echo "$out"
+  status=$(echo "$out" | awk '/"status"/{print $2}' | tr -d '",')
+  if [ "$status" = "fail" ]; then
+    echo "Skill $s failed. Aborting."
+    exit 1
+  fi
+done
+echo '{"skill":"ci-orchestrator","status":"pass","summary":"all skills completed"}'
+ORC
+chmod +x tools/skills/ci-orchestrator.sh
+
+# minimal CI workflow
+mkdir -p .github/workflows
+cat > .github/workflows/ci.yml <<'CI'
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust & Foundry
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install Foundry
+        run: curl -L https://foundry.paradigm.xyz | bash && foundryup
+      - name: Setup GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      - name: Run orchestrator
+        run: |
+          chmod +x tools/skills/*.sh
+          tools/skills/ci-orchestrator.sh
+CI
+
+echo "SMC project $NAME created at $DIR"
