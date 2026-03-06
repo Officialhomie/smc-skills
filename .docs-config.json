@@ -1,0 +1,7 @@
+{
+  "github_repo": "",
+  "github_branch": "main",
+  "production_url": "",
+  "site_title": "Smart Contract Skills System",
+  "site_description": "Root-level skill scripts for Solidity/Foundry projects. Use from Claude, Cursor, or CLI to add security and quality checks to any project."
+}

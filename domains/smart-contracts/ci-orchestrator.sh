@@ -36,12 +36,13 @@ SKILLS=(
   "tools/skills/event-emission-check.sh"
   "tools/skills/pausable-check.sh"
 
-  # Phase 6: Utilities
+  # Phase 6: Utilities & Docs
   "tools/skills/dependency-audit.sh"
   "tools/skills/format-check.sh"
   "tools/skills/static-analysis.sh"
   "tools/skills/run-tests.sh"
   "tools/skills/github-status.sh"
+  "tools/skills/docs-standard-install.sh"
 )
 for s in "${SKILLS[@]}"; do
   echo ">>> running $s"
