@@ -61,3 +61,23 @@ This updates the template portion of `CLAUDE.md` and preserves everything below 
 - **Orchestrator:** After installing skills into a project, run `./tools/skills/ci-orchestrator.sh` from that project. The orchestrator runs each skill in order and exits on first `"status":"fail"`.
 - **New skills:** Add script to `skills/`, `chmod +x`, emit JSON with `skill`, `status`, `summary`, `artifacts`, `metadata`. Update `ci-orchestrator.sh` and `SKILLS_CATALOG.md`.
 - **Docs:** When editing README or SKILLS_CATALOG, keep examples and paths consistent with the structure above. Follow the Cyfrin-inspired standard: clear quickstart, how-tos, and reference.
+
+## Skill Graph (`.claude/skills/`)
+
+A navigational skill graph lives in `.claude/skills/`. Read this before running skills to understand what exists and why.
+
+**Entry point:** `.claude/skills/index.md` — start here, then follow wikilinks progressively.
+
+**Navigation pattern:**
+- `index.md` → `smart-contracts.md` (domain MOC) → `phases/phase-NN-*.md` (phase MOC) → `concepts/*.md` (concept nodes)
+- Concept nodes link to each other via `[[wikilink]]` syntax woven into prose
+- Every concept node names the exact skill scripts that check for it and provides `jq` queries to extract relevant findings
+
+**When to use the skill graph:**
+- To understand *why* a skill exists before running it
+- To navigate from a concept (e.g. "flash loan risk") to the skills that check for it
+- To understand cross-phase dependencies and which phase to run for a targeted audit
+
+**Wikilink format:** `[[slug]]` where slug matches the filename without `.md` (all kebab-case).
+
+When adding new skill scripts, update the relevant phase MOC (`phases/`) and concept node (`concepts/`) in the same commit.
